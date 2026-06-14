@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amas ouvert — séquence principale et turn-off</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#05070d; --panel:#0e1524; --panel2:#131d31;
+    --ink:#cdd8ec; --ink-dim:#7d8aa3; --line:#22304c;
+    --accent:#e8a23d; --accent-d:#b97c24;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:'IBM Plex Sans',sans-serif;overflow:hidden;}
+  #stage{position:fixed;inset:0;}
+  canvas{position:absolute;inset:0;display:block;touch-action:none;cursor:grab;}
+  canvas:active{cursor:grabbing;}
+
+  #panel{position:fixed;top:14px;left:14px;width:252px;
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:10px;
+    padding:14px 14px 12px;box-shadow:0 10px 40px rgba(0,0,0,.55);
+    user-select:none;backdrop-filter:blur(2px);}
+  #panel h1{font-size:12px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 2px;font-weight:600;}
+  #panel .sub{font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+    color:var(--ink-dim);margin:0 0 12px;letter-spacing:.02em;}
+
+  .row{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
+  button{flex:1 1 auto;min-width:0;background:#16223a;color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:7px 6px;
+    font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:500;
+    cursor:pointer;transition:background .12s,border-color .12s,color .12s;}
+  button:hover{background:#1d2c49;border-color:#33476e;}
+  button:active{transform:translateY(1px);}
+  button.on{background:var(--accent);border-color:var(--accent-d);color:#1a1205;font-weight:600;}
+
+  .slider{margin:9px 0 2px;}
+  .slider label{display:flex;justify-content:space-between;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);
+    margin-bottom:3px;}
+  .slider label b{color:var(--ink);font-weight:500;}
+  input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:4px;
+    background:var(--line);border-radius:3px;outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid #1a2438;}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:var(--accent);cursor:pointer;border:2px solid #1a2438;}
+
+  #readout{margin-top:11px;padding-top:10px;border-top:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.65;color:var(--ink-dim);}
+  #readout span{color:var(--ink);}
+  #readout .to{color:var(--accent);}
+  #sig{margin-top:10px;
+    font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-dim);
+    text-align:center;letter-spacing:.03em;}
+
+  #hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);
+    background:rgba(14,21,36,.7);border:1px solid var(--line);border-radius:20px;
+    padding:6px 16px;backdrop-filter:blur(2px);}
+  #hint b{color:var(--accent);font-weight:500;}
+
+  #docBtn{margin-top:11px;margin-bottom:0;}
+  #docOverlay{position:fixed;inset:0;z-index:60;display:none;
+    align-items:center;justify-content:center;padding:20px;
+    background:rgba(3,5,10,.74);backdrop-filter:blur(3px);}
+  #docOverlay.show{display:flex;}
+  #docBox{position:relative;width:min(580px,92vw);max-height:86vh;overflow-y:auto;
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:12px;
+    padding:28px 30px 26px;box-shadow:0 24px 80px rgba(0,0,0,.6);}
+  #docBox h2{font-size:14px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 16px;font-weight:600;}
+  #docBox p.intro{color:var(--ink-dim);border-left:2px solid var(--accent-d);
+    padding-left:13px;font-size:12.5px;line-height:1.6;margin:0 0 18px;}
+  #docBox ol{margin:0;padding-left:20px;}
+  #docBox li{font-size:13.5px;line-height:1.55;color:var(--ink);margin-bottom:11px;}
+  #docBox li b{color:var(--accent);font-weight:600;}
+  #docBox .k{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink);
+    background:#16223a;border:1px solid var(--line);border-radius:4px;padding:1px 5px;white-space:nowrap;}
+  #docClose{position:absolute;top:12px;right:14px;flex:0 0 auto;width:30px;height:30px;
+    padding:0;font-size:17px;line-height:1;border-radius:6px;}
+
+  #fps{position:fixed;top:14px;right:14px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);
+    background:rgba(14,21,36,.7);border:1px solid var(--line);border-radius:6px;
+    padding:5px 10px;backdrop-filter:blur(2px);}
+  #fps.low{color:var(--accent);border-color:var(--accent-d);}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas></div>
+
+<div id="panel">
+  <h1>Amas ouvert</h1>
+  <p class="sub">IMF Salpeter · séquence principale · turn-off</p>
+
+  <div class="row"><button id="bMov">▶ Lancer mouvement</button></div>
+  <div class="row"><button id="bEvo">▶ Lancer évolution</button></div>
+  <div class="row">
+    <button id="bRot">Rotation auto</button>
+  </div>
+  <div class="row">
+    <button id="bRSpr" class="on">Sprites</button>
+    <button id="bRP1">Points</button>
+    <button id="bRP2">Points 2px</button>
+  </div>
+  <div class="row">
+    <button id="bHR">Diagramme H-R</button>
+    <button id="bGen">⟳ Régénérer</button>
+  </div>
+
+  <div class="slider">
+    <label>Étoiles N <b id="vN">500</b></label>
+    <input type="range" id="sN" min="100" max="1000" value="500" step="50">
+  </div>
+  <div class="slider">
+    <label>Vitesse d'évolution <b id="vSpd">×1</b></label>
+    <input type="range" id="sSpd" min="0" max="6" value="3" step="1">
+  </div>
+  <div class="slider">
+    <label>Vitesse dynamique <b id="vDyn">1</b></label>
+    <input type="range" id="sDyn" min="1" max="8" value="1" step="1">
+  </div>
+  <div class="slider">
+    <label>Échelle vue <b id="vZoom">×1.0</b></label>
+    <input type="range" id="sZoom" min="0.3" max="4" value="1" step="0.1">
+  </div>
+  <div class="slider">
+    <label>Luminosité (points) <b id="vLum">×2.0</b></label>
+    <input type="range" id="sLum" min="0.2" max="4" value="2" step="0.1">
+  </div>
+
+  <div id="readout">
+    N : <span id="rN">0</span> &nbsp; âge : <span id="rAge">—</span><br>
+    temps dyn. : <span id="rTd">0</span> t<sub>cr</sub><br>
+    turn-off : <span id="rTO" class="to">—</span><br>
+    séq. principale : <span id="rMS">0</span><br>
+    géantes : <span id="rG">0</span> &nbsp; naines bl. : <span id="rW">0</span><br>
+    variables : <span id="rVar">0</span>
+  </div>
+  <div class="row" id="docBtn"><button id="bDoc">Documentation</button></div>
+  <p id="sig">Pierre Revel + Claude 2026</p>
+</div>
+
+<div id="hint">Glisser pour tourner · molette pour <b>zoomer</b></div>
+<div id="fps">— fps</div>
+
+
+<div id="docOverlay">
+  <div id="docBox">
+    <button id="docClose" title="Fermer">×</button>
+    <h2>Mode d'emploi</h2>
+    <p class="intro">Cette simulation reproduit la vie d'un amas ouvert — mouvement des étoiles sous leur gravité mutuelle et évolution sur le diagramme de Hertzsprung-Russell — à des fins didactiques. Elle cherche à s'approcher de la réalité, mais les échelles de temps et de mouvement ont été fortement adaptées pour rester observables : dans la nature, ces phénomènes s'étalent sur des centaines de millions à plusieurs milliards d'années.</p>
+    <ol>
+      <li>Fixer le nombre d'étoiles avec le curseur <span class="k">Étoiles N</span> (toute modification régénère l'amas, sinon <span class="k">⟳ Régénérer</span>).</li>
+      <li>Lancer <span class="k">▶ Lancer mouvement</span> : les étoiles s'animent sous leur gravité mutuelle.</li>
+      <li>Lancer <span class="k">▶ Lancer évolution</span> : l'amas vieillit et le turn-off de la séquence principale descend vers les faibles masses.</li>
+      <li>Quand le turn-off (lu dans le panneau) passe entre <b>5 et 2 M⊙</b>, ralentir l'évolution — <span class="k">Vitesse d'évolution</span> sur ×0,1 à ×0,2 : c'est là que les céphéides traversent la bande d'instabilité et se mettent à pulser. À pleine vitesse elles ne font que passer.</li>
+      <li>Avec beaucoup d'étoiles, basculer en <span class="k">Rendu points</span> pour fluidifier l'affichage.</li>
+      <li>La pause de l'évolution fige l'âge ; les céphéides présentes continuent de pulser sur leur horloge propre, le temps de les commenter.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+'use strict';
+(function(){
+
+  // ====================================================================
+  // MODÈLE STELLAIRE DIDACTIQUE (lois de puissance calibrées sur le Soleil).
+  // Approximations volontaires : justes en ordre de grandeur sur la
+  // séquence principale, ce ne sont pas des tracks d'évolution réels.
+  //   L  ∝ M^3.5         (relation masse-luminosité)
+  //   t_MS ∝ M^-2.5      (durée sur la SP ; t_MS(1 M⊙) = 10 Gyr)
+  //   R  ∝ M^0.7   ->    T_eff ∝ (L/R²)^¼ ∝ M^0.525
+  // ====================================================================
+  const TSUN    = 5772;          // K
+  const TMS_SUN = 1.0e10;        // ans
+  const AGE0    = 1.0e6;         // âge initial (1 Myr)
+  const AGE_MAX = 1.65e10;       // borne : turn-off à la frontière G/K (~5200 K, 0.82 M⊙), puis arrêt automatique
+  const EVRATE  = 0.10;          // vitesse de vieillissement (échelle log) — ~1 min 35 à vitesse 1
+
+  const MMIN = 0.4, MMAX = 25, ALPHA = 2.35;   // IMF de Salpeter
+  const ERR_L_MAG = 0.30;        // dispersion photométrique 1σ EN MAGNITUDES (largeur verticale de la SP)
+  const ERR_LOGT  = 0.013;       // dispersion 1σ en dex de log(T_eff) (largeur en couleur / horizontale)
+  const M_SN = 8;                // seuil de masse : au-delà supernova, en deçà nébuleuse planétaire (M⊙)
+  const W_EVENT = 0.10;          // durée de l'événement terminal (fraction de t_MS)
+  // bande d'instabilité (Céphéides) — horloge propre, pulsation en temps réel
+  const STRIP_TBLUE=8500, STRIP_TRED=5100, STRIP_LMIN=1.0;  // bande élargie (bords bleu/rouge en K) + luminosité mini
+  const M_CEPH=1.5;             // masse mini d'une Céphéide ; sous ~2.1 M⊙ la pulsation démarre quasi au turn-off (assumé)
+  const PULS_AMP=0.70;           // amplitude de pulsation (exagérée pour la visibilité ; ~1.9 mag crête-à-crête)
+
+  function luminosity(M){ return Math.pow(M, 3.5); }       // L/L⊙ (ZAMS)
+  function tMS(M){ return TMS_SUN * Math.pow(M, -2.5); }   // ans
+  function teff(M){ return TSUN * Math.pow(M, 0.525); }    // K (ZAMS)
+  function turnoffMass(age){ return Math.pow(age/TMS_SUN, -1/2.5); }
+
+  // état d'une étoile à un âge donné -> {L, T, phase, sizeF}
+  // phase : 0 séquence principale, 1 géante, 2 naine blanche / reste
+  // phase : 0 séq. principale, 1 géante, 3 événement terminal, 2 reste (naine blanche ou compact)
+  // evt  : 0 aucun, 1 nébuleuse planétaire (M<M_SN), 2 supernova (M≥M_SN)
+  function evolve(M, tms, L0, T0, age){
+    const x = age / tms;
+    if (x < 1){
+      return { L: L0*(1+0.6*x), T: T0*(1-0.06*x), phase:0, sizeF:1, evt:0, inten:0 };
+    } else if (x < 1.12){
+      const u=(x-1)/0.12, Tg=T0*0.94;
+      return { L: L0*(1.6+u*60), T: Tg*Math.pow(3600/Tg,u), phase:1, sizeF:1+u*6, evt:0, inten:0 };
+    } else if (x < 1.12+W_EVENT && sim.runEvo && age < AGE_MAX){   // flash visible seulement si l'évolution avance
+      const u=(x-1.12)/W_EVENT, inten=Math.sin(Math.PI*u), sn=M>=M_SN;   // bouffée en cloche
+      return { L:(sn?1e8:1e4)*inten+1, T: sn?20000:6000, phase:3, sizeF:(sn?14:8)*inten+1, evt:sn?2:1, inten:inten };
+    }
+    if (M>=M_SN) return { L:1e-4, T:1e5, phase:2, sizeF:0.3, evt:2, inten:0 };   // étoile à neutrons / trou noir
+    let T=12000*Math.pow(0.6, Math.min((x-1.12-W_EVENT)*4,3)); if(T<4000)T=4000;
+    return { L:0.02, T:T, phase:2, sizeF:0.5, evt:1, inten:0 };                   // naine blanche
+  }
+
+  function specType(T){
+    if (T>=30000) return 'O'; if (T>=10000) return 'B'; if (T>=7500) return 'A';
+    if (T>=6000)  return 'F'; if (T>=5200)  return 'G'; if (T>=3700) return 'K';
+    return 'M';
+  }
+  function fmtAge(a){
+    if (a<1e9) return (a/1e6).toFixed(a<1e8?1:0)+' Myr';
+    return (a/1e9).toFixed(2)+' Gyr';
+  }
+
+  // couleur d'un corps noir (ancres réalistes, interpolation linéaire en T)
+  const CANCH=[
+    [3000,255,170,110],[3500,255,190,140],[4000,255,210,170],[5000,255,235,215],
+    [5800,255,248,240],[6600,248,247,255],[8000,225,235,255],[10000,202,216,255],
+    [15000,180,200,255],[25000,162,186,255],[40000,150,178,255]
+  ];
+  function bbColor(T){
+    if (T<=CANCH[0][0]) return [CANCH[0][1],CANCH[0][2],CANCH[0][3]];
+    const last=CANCH[CANCH.length-1];
+    if (T>=last[0]) return [last[1],last[2],last[3]];
+    for (let i=0;i<CANCH.length-1;i++){
+      const a=CANCH[i], b=CANCH[i+1];
+      if (T>=a[0] && T<b[0]){ const k=(T-a[0])/(b[0]-a[0]);
+        return [Math.round(a[1]+k*(b[1]-a[1])),Math.round(a[2]+k*(b[2]-a[2])),Math.round(a[3]+k*(b[3]-a[3]))]; }
+    }
+    return [255,255,255];
+  }
+
+  // --- état ---
+  let N=500;
+  let px,py,pz, vx,vy,vz, ax,ay,az, mass, mdyn, tms, L0, T0, errL, errT, puPhase;   // SoA (puPhase : phase de pulsation)
+  const sim = { runDyn:false, runEvo:false, speed:1, dyn:1, tdyn:0, zoom:1.0, rotate:false, mode:'sprites', lum:2.0, showHR:false, age:AGE0 };
+
+  // ---------- canvas + DPR ----------
+  const cv  = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  let W=0, H=0, DPR=1, baseScale=120, cx=0, cy=0;
+
+  // rendu points : buffer d'accumulation additif + tone-mapping
+  let accW=0, accH=0, accBuf, accImg, accData;
+  const accCanvas=document.createElement('canvas'), accCtx=accCanvas.getContext('2d');
+  const LUTN=1024, ACCMAX=8, IDX=LUTN/ACCMAX;
+  const HALO_LMIN=40, HALO_MAX=7, HALO_ALPHA=0.55;   // halos en mode points : seuil de luminosité, rayon max (px), opacité
+  const toneLUT=new Uint8Array(LUTN);
+  for (let k=0;k<LUTN;k++) toneLUT[k]=Math.round(255*(1-Math.exp(-(k/LUTN*ACCMAX))));
+
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = Math.max(1, window.innerWidth); H = Math.max(1, window.innerHeight);   // garde-fou : 0 -> IndexSizeError sur createImageData
+    cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+    cv.style.width = W+'px'; cv.style.height = H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    baseScale = Math.min(W,H)/8; cx=W/2; cy=H/2;
+    accW=W; accH=H; accCanvas.width=accW; accCanvas.height=accH;
+    accImg=accCtx.createImageData(accW,accH); accData=accImg.data;
+    accBuf=new Float32Array(accW*accH*3);
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- sprites par classe de température ----------
+  const NB=24, TB_LO=3000, TB_HI=40000, LNRATIO=Math.log(TB_HI/TB_LO);
+  const sprites=[];
+  function makeSprite(c){
+    const s=64,q=document.createElement('canvas'); q.width=q.height=s;
+    const g=q.getContext('2d'), rgb=c[0]+','+c[1]+','+c[2];
+    const grad=g.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+    grad.addColorStop(0,'rgba('+rgb+',1)');
+    grad.addColorStop(0.08,'rgba('+rgb+',1)');      // plateau : coeur net (réduit)
+    grad.addColorStop(0.24,'rgba('+rgb+',0.48)');   // point MÉDIAN ancien/resserré
+    grad.addColorStop(0.45,'rgba('+rgb+',0.22)');
+    grad.addColorStop(0.70,'rgba('+rgb+',0.10)');
+    grad.addColorStop(1,'rgba('+rgb+',0)');
+    g.fillStyle=grad; g.beginPath(); g.arc(s/2,s/2,s/2,0,2*Math.PI); g.fill();
+    return q;
+  }
+  const binR=[],binG=[],binB=[];
+  for (let i=0;i<NB;i++){
+    const T=TB_LO*Math.exp(LNRATIO*i/(NB-1)), c=bbColor(T);
+    sprites.push(makeSprite(c)); binR.push(c[0]/255); binG.push(c[1]/255); binB.push(c[2]/255);
+  }
+  const spriteSN=makeSprite([225,236,255]);   // supernova : flash blanc-bleu
+  const spritePN=makeSprite([120,255,205]);   // nébuleuse planétaire : turquoise (raie OIII)
+  function binOfT(T){
+    let i=Math.round(Math.log(Math.max(TB_LO,Math.min(TB_HI,T))/TB_LO)/LNRATIO*(NB-1));
+    return i<0?0:(i>=NB?NB-1:i);
+  }
+
+  // ---------- génération de l'amas (positions Plummer 3D, pas de dynamique) ----------
+  // --- dynamique gravitationnelle (unités N-body de Hénon : G=1, Σm=1) ---
+  const APL=3*Math.PI/16;        // rayon d'échelle de Plummer (≈0.589)
+  const GDYN=1, EPS=0.05, EPS2=EPS*EPS, DT_DYN=0.002, TCROSS=2.83;   // 0.002 : valeur retenue par Pierre apres tests (original 0.01)
+  function rnd(){ return Math.random(); }
+  // tirage gaussien (Box-Muller), borné à ±3σ
+  function gauss(){ let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random();
+    const g=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); return g<-3?-3:(g>3?3:g); }
+  function genCluster(n){
+    N=n;
+    px=new Float64Array(N); py=new Float64Array(N); pz=new Float64Array(N);
+    vx=new Float64Array(N); vy=new Float64Array(N); vz=new Float64Array(N);
+    ax=new Float64Array(N); ay=new Float64Array(N); az=new Float64Array(N);
+    mass=new Float64Array(N); mdyn=new Float64Array(N);
+    tms=new Float64Array(N); L0=new Float64Array(N); T0=new Float64Array(N);
+    errL=new Float64Array(N); errT=new Float64Array(N); puPhase=new Float64Array(N);
+    const e=1-ALPHA, lo=Math.pow(MMIN,e), hi=Math.pow(MMAX,e);
+    let msum=0;
+    for (let i=0;i<N;i++){
+      const M=Math.pow(lo+rnd()*(hi-lo),1/e);
+      mass[i]=M; msum+=M; tms[i]=tMS(M); L0[i]=luminosity(M); T0[i]=teff(M);
+      errL[i]=Math.pow(10, -0.4*gauss()*ERR_L_MAG);   // erreur photométrique fixe (mag -> facteur L)
+      errT[i]=Math.pow(10, gauss()*ERR_LOGT);          // erreur en couleur fixe (dex -> facteur T)
+      puPhase[i]=2*Math.PI*rnd();                      // phase de pulsation propre (déphasage des variables)
+      // position : inversion de M(r)/M = r³/(r²+A²)^{3/2}
+      let r; do { const X=rnd(); r=APL/Math.sqrt(Math.pow(X,-2/3)-1); } while(!(r<8*APL));
+      let u=2*rnd()-1, ph=2*Math.PI*rnd(), s=Math.sqrt(1-u*u);
+      px[i]=r*s*Math.cos(ph); py[i]=r*s*Math.sin(ph); pz[i]=r*u;
+      // vitesse : f(v) ∝ v²(1-v²/v_e²)^{7/2}, tirée par rejet ; v_e = √2 (r²+A²)^{-1/4}
+      const ve=Math.SQRT2*Math.pow(r*r+APL*APL,-0.25);
+      let q,g; do { q=rnd(); g=0.1*rnd(); } while (g > q*q*Math.pow(1-q*q,3.5));
+      const v=q*ve;
+      u=2*rnd()-1; ph=2*Math.PI*rnd(); s=Math.sqrt(1-u*u);
+      vx[i]=v*s*Math.cos(ph); vy[i]=v*s*Math.sin(ph); vz[i]=v*u;
+    }
+    // masses dynamiques normalisées (Σ = 1) ; figées : l'évolution stellaire ne rétroagit pas
+    for (let i=0;i<N;i++) mdyn[i]=mass[i]/msum;
+    // recentrer position ET vitesse du centre de masse
+    let MX=0,MY=0,MZ=0,VX=0,VY=0,VZ=0;
+    for (let i=0;i<N;i++){ MX+=mdyn[i]*px[i];MY+=mdyn[i]*py[i];MZ+=mdyn[i]*pz[i];
+                           VX+=mdyn[i]*vx[i];VY+=mdyn[i]*vy[i];VZ+=mdyn[i]*vz[i]; }
+    for (let i=0;i<N;i++){ px[i]-=MX;py[i]-=MY;pz[i]-=MZ; vx[i]-=VX;vy[i]-=VY;vz[i]-=VZ; }
+    // virialisation : rescale les vitesses pour imposer 2K + U = 0 (équilibre exact, pas de pulsation initiale)
+    let U=0;
+    for (let i=0;i<N;i++) for (let j=i+1;j<N;j++){
+      const dx=px[j]-px[i],dy=py[j]-py[i],dz=pz[j]-pz[i];
+      U -= GDYN*mdyn[i]*mdyn[j]/Math.sqrt(dx*dx+dy*dy+dz*dz+EPS2);
+    }
+    let K=0; for (let i=0;i<N;i++) K+=mdyn[i]*(vx[i]*vx[i]+vy[i]*vy[i]+vz[i]*vz[i]); K*=0.5;
+    if (K>0){ const f=Math.sqrt(-U/(2*K)); for (let i=0;i<N;i++){ vx[i]*=f;vy[i]*=f;vz[i]*=f; } }
+    sim.age=AGE0; sim.tdyn=0;
+  }
+
+  // ---------- dynamique gravitationnelle (O(n²), masses figées) ----------
+  function computeAccel(){
+    ax.fill(0); ay.fill(0); az.fill(0);
+    for (let i=0;i<N;i++){
+      const xi=px[i],yi=py[i],zi=pz[i],mi=mdyn[i];
+      let axi=0,ayi=0,azi=0;
+      for (let j=i+1;j<N;j++){
+        const dx=px[j]-xi, dy=py[j]-yi, dz=pz[j]-zi;
+        const r2=dx*dx+dy*dy+dz*dz+EPS2;
+        const inv=1/Math.sqrt(r2), inv3=inv/r2;
+        const fmj=GDYN*mdyn[j]*inv3, fmi=GDYN*mi*inv3;
+        axi+=fmj*dx; ayi+=fmj*dy; azi+=fmj*dz;
+        ax[j]-=fmi*dx; ay[j]-=fmi*dy; az[j]-=fmi*dz;   // action = réaction
+      }
+      ax[i]+=axi; ay[i]+=ayi; az[i]+=azi;
+    }
+  }
+  function stepDynamics(h){             // Euler-Cromer (semi-implicite, symplectique)
+    computeAccel();
+    for (let i=0;i<N;i++){
+      vx[i]+=ax[i]*h; vy[i]+=ay[i]*h; vz[i]+=az[i]*h;
+      px[i]+=vx[i]*h; py[i]+=vy[i]*h; pz[i]+=vz[i]*h;
+    }
+    sim.tdyn+=h;
+  }
+
+  // ---------- rendu spatial ----------
+  let th=0.6, ph=0.30, tPuls=0;
+  const sxBuf=[], syBuf=[], stT=[], stL=[], stP=[], stS=[], stEvt=[], stInt=[], stVar=[], stPul=[];
+  function project(){
+    const scale=baseScale*sim.zoom;
+    const ct=Math.cos(th),st=Math.sin(th),cp=Math.cos(ph),sp=Math.sin(ph);
+    for (let i=0;i<N;i++){
+      const x=px[i],y=py[i],z=pz[i];
+      const xr=x*ct+z*st, zr=-x*st+z*ct, yr=y*cp-zr*sp;
+      sxBuf[i]=cx+xr*scale; syBuf[i]=cy-yr*scale;
+      const e=evolve(mass[i],tms[i],L0[i],T0[i], sim.age);
+      const T=e.T*errT[i]; let L=e.L*errL[i]; let sizeF=e.sizeF;
+      stP[i]=e.phase; stEvt[i]=e.evt; stInt[i]=e.inten;
+      // Céphéide : géante massive évoluée traversant la bande d'instabilité (pas la SP, pas dès le turn-off)
+      let vari=false, pul=1;
+      if (e.phase===1 && mass[i]>=M_CEPH && T<=STRIP_TBLUE && T>=STRIP_TRED){
+        const lL=Math.log10(L);
+        if (lL>=STRIP_LMIN){
+          vari=true;
+          const f=0.5-0.3*Math.min(Math.max((lL-1)/3,0),1);   // P-L : plus brillante = plus lente (0.5->0.2 Hz)
+          pul=1+PULS_AMP*Math.sin(2*Math.PI*f*tPuls+puPhase[i]);
+          L*=pul; sizeF*=pul;                                 // éclat (HR) ET taille du halo (visuel) battent
+        }
+      }
+      stT[i]=T; stL[i]=L; stS[i]=sizeF; stVar[i]=vari; stPul[i]=pul;
+    }
+  }
+  // flash des événements terminaux (supernova / nébuleuse planétaire), dessiné par-dessus en additif
+  function drawEvents(){
+    ctx.globalCompositeOperation='lighter';
+    for (let i=0;i<N;i++){
+      if (stP[i]!==3) continue;
+      const sz=((stEvt[i]===2?30:18)*stInt[i]+2)*sim.zoom;
+      ctx.drawImage(stEvt[i]===2?spriteSN:spritePN, sxBuf[i]-sz, syBuf[i]-sz, sz*2, sz*2);
+    }
+    ctx.globalCompositeOperation='source-over';
+  }
+
+  function renderCluster(){
+    ctx.globalCompositeOperation='source-over';
+    ctx.fillStyle='#05070d'; ctx.fillRect(0,0,W,H);
+    if (sim.mode!=='sprites'){
+      accBuf.fill(0);
+      const P2 = (sim.mode==='p2');   // noyau : tente 3x3 (2x2 px lissé, flux x4) ou bilinéaire 1 px
+      for (let i=0;i<N;i++){
+        const sx=sxBuf[i], sy=syBuf[i];
+        if (sx<1||sy<1||sx>=accW-1||sy>=accH-1) continue;
+        if (stP[i]===3 || (stP[i]===2&&stEvt[i]===2)) continue;   // événements / restes compacts : traités à part
+        if (stVar[i]) continue;   // variables (Céphéides...) : rendues en sprites, voir plus bas
+        const ix=sx|0, iy=sy|0, fx=sx-ix, fy=sy-iy, b=binOfT(stT[i]);
+        const lum=sim.lum*Math.pow(stL[i]/stPul[i]+1e-3,0.22)*stPul[i]*(stP[i]===1?2:1);   // pulsation réappliquée linéairement (sinon la compression 0.22 l'écrase)
+        const r=binR[b]*lum, g=binG[b]*lum, bl=binB[b]*lum;
+        if (P2){
+          const hx0=1-fx, hx2=fx, hy0=1-fy, hy2=fy;       // poids tente : (1-f, 1, f)
+          for (let dy=-1; dy<=1; dy++){
+            const wy = dy<0?hy0 : dy>0?hy2 : 1;
+            if (wy===0) continue;
+            let p=((iy+dy)*accW+ix-1)*3;
+            const w0=hx0*wy, w1=wy, w2=hx2*wy;
+            accBuf[p]+=r*w0; accBuf[p+1]+=g*w0; accBuf[p+2]+=bl*w0;
+            accBuf[p+3]+=r*w1; accBuf[p+4]+=g*w1; accBuf[p+5]+=bl*w1;
+            accBuf[p+6]+=r*w2; accBuf[p+7]+=g*w2; accBuf[p+8]+=bl*w2;
+          }
+        } else {
+          const w00=(1-fx)*(1-fy), w10=fx*(1-fy), w01=(1-fx)*fy, w11=fx*fy;
+          let p=(iy*accW+ix)*3;     accBuf[p]+=r*w00; accBuf[p+1]+=g*w00; accBuf[p+2]+=bl*w00;
+          p=(iy*accW+ix+1)*3;       accBuf[p]+=r*w10; accBuf[p+1]+=g*w10; accBuf[p+2]+=bl*w10;
+          p=((iy+1)*accW+ix)*3;     accBuf[p]+=r*w01; accBuf[p+1]+=g*w01; accBuf[p+2]+=bl*w01;
+          p=((iy+1)*accW+ix+1)*3;   accBuf[p]+=r*w11; accBuf[p+1]+=g*w11; accBuf[p+2]+=bl*w11;
+        }
+      }
+      const data=accData,buf=accBuf,n=accW*accH;
+      for (let q=0,p=0,di=0;q<n;q++,p+=3,di+=4){
+        let v=buf[p]*IDX;   data[di]  =toneLUT[v<LUTN?(v|0):LUTN-1];
+        v=buf[p+1]*IDX;     data[di+1]=toneLUT[v<LUTN?(v|0):LUTN-1];
+        v=buf[p+2]*IDX;     data[di+2]=toneLUT[v<LUTN?(v|0):LUTN-1];
+        data[di+3]=255;
+      }
+      accCtx.putImageData(accImg,0,0); ctx.drawImage(accCanvas,0,0,W,H);
+      // halos additifs sur les étoiles brillantes (géantes, massives) : réalisme sans surcharger les points
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=HALO_ALPHA;
+      for (let i=0;i<N;i++){
+        if (stVar[i] || stL[i]<HALO_LMIN || stP[i]===3 || (stP[i]===2&&stEvt[i]===2)) continue;
+        const sx=sxBuf[i], sy=syBuf[i]; if (sx<0||sy<0||sx>=W||sy>=H) continue;
+        let sz=(0.8+0.9*Math.log10(stL[i]))*sim.zoom; if (sz>HALO_MAX) sz=HALO_MAX;
+        ctx.drawImage(sprites[binOfT(stT[i])], sx-sz, sy-sz, sz*2, sz*2);
+      }
+      ctx.globalAlpha=1;
+      // Céphéides & variables : TOUJOURS en sprites, même en mode points — la
+      // pulsation serait illisible écrasée sur 1-4 pixels ; ici c'est la SURFACE
+      // du sprite qui respire (stL inclut la pulsation), et ça, l'oeil le voit.
+      for (let i=0;i<N;i++){
+        if (!stVar[i] || stP[i]===3 || (stP[i]===2&&stEvt[i]===2)) continue;
+        const sx=sxBuf[i], sy=syBuf[i];
+        if (sx<-40||sy<-40||sx>W+40||sy>H+40) continue;
+        const sz=(1.6+1.4*Math.log10(stL[i]+1))*stS[i]*sim.zoom;
+        ctx.drawImage(sprites[binOfT(stT[i])], sx-sz, sy-sz, sz*2, sz*2);
+      }
+      ctx.globalCompositeOperation='source-over';
+      drawEvents();
+    } else {
+      ctx.globalCompositeOperation='lighter';
+      for (let i=0;i<N;i++){
+        if (stP[i]===3 || (stP[i]===2&&stEvt[i]===2)) continue;   // événements / restes compacts à part
+        const sz=(1.6+1.4*Math.log10(stL[i]+1))*stS[i]*sim.zoom;
+        ctx.drawImage(sprites[binOfT(stT[i])], sxBuf[i]-sz, syBuf[i]-sz, sz*2, sz*2);
+      }
+      ctx.globalCompositeOperation='source-over';
+      drawEvents();
+    }
+  }
+
+  // ---------- diagramme H-R (overlay haut-droite) ----------
+  function drawHR(){
+    const w=Math.min(660,W*0.72), h=Math.min(620,H*0.86);
+    const x0=W-w-16, y0=16;
+    ctx.save();
+    ctx.fillStyle='rgba(8,12,22,0.82)'; ctx.strokeStyle='#22304c'; ctx.lineWidth=1;
+    ctx.fillRect(x0,y0,w,h); ctx.strokeRect(x0,y0,w,h);
+    const ml=48,mr=16,mt=34,mb=30, pw=w-ml-mr, phh=h-mt-mb;
+    const px0=x0+ml, py0=y0+mt;
+    const LTx0=4.70, LTx1=3.30, LLy0=-4, LLy1=6;
+    const X=lt=>px0+(1-(lt-LTx1)/(LTx0-LTx1))*pw;
+    const Y=ll=>py0+(1-(ll-LLy0)/(LLy1-LLy0))*phh;
+    ctx.fillStyle='#e8a23d'; ctx.font="600 14px 'IBM Plex Sans',sans-serif";
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillText('Diagramme de Hertzsprung-Russell', x0+12, y0+21);
+    ctx.strokeStyle='rgba(86,128,196,0.15)'; ctx.fillStyle='#7d8aa3';
+    ctx.font="12px 'IBM Plex Mono',monospace";
+    for (let ll=LLy0; ll<=LLy1; ll+=2){
+      const yy=Y(ll); ctx.beginPath(); ctx.moveTo(px0,yy); ctx.lineTo(px0+pw,yy); ctx.stroke();
+      ctx.textAlign='right'; ctx.textBaseline='middle'; ctx.fillText('10'+(ll<0?'\u2212':'')+Math.abs(ll), px0-4, yy);
+    }
+    const types=[['O',40000],['B',20000],['A',8500],['F',6700],['G',5500],['K',4400],['M',3300]];
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    for (const t of types){ const xx=X(Math.log10(t[1])); if(xx>=px0&&xx<=px0+pw){
+      ctx.strokeStyle='rgba(86,128,196,0.12)'; ctx.beginPath(); ctx.moveTo(xx,py0); ctx.lineTo(xx,py0+phh); ctx.stroke();
+      ctx.fillStyle='#9aa7c0'; ctx.fillText(t[0], xx, py0-3); } }
+    ctx.save(); ctx.translate(x0+11,py0+phh/2); ctx.rotate(-Math.PI/2);
+    ctx.fillStyle='#7d8aa3'; ctx.textAlign='center'; ctx.fillText('L / L\u2609', 0,0); ctx.restore();
+
+    // ZAMS de référence
+    ctx.strokeStyle='rgba(120,150,210,0.5)'; ctx.lineWidth=1; ctx.beginPath();
+    for (let k=0;k<=60;k++){ const M=MMIN*Math.pow(MMAX/MMIN,k/60);
+      const xx=X(Math.log10(teff(M))), yy=Y(Math.log10(luminosity(M)));
+      if(k===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
+    ctx.stroke();
+
+    const clip=(xx,yy)=> xx>=px0-2&&xx<=px0+pw+2&&yy>=py0-2&&yy<=py0+phh+2;
+    // bande d'instabilité (Céphéides) : zone où les étoiles pulsent
+    {
+      const xb=X(Math.log10(STRIP_TBLUE)), xr=X(Math.log10(STRIP_TRED)), yb=Y(STRIP_LMIN);
+      ctx.fillStyle='rgba(150,120,220,0.10)';
+      ctx.fillRect(Math.min(xb,xr), py0, Math.abs(xr-xb), yb-py0);
+      ctx.strokeStyle='rgba(170,140,235,0.45)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(xb,py0); ctx.lineTo(xb,yb); ctx.moveTo(xr,py0); ctx.lineTo(xr,yb); ctx.stroke(); ctx.setLineDash([]);
+      ctx.save(); ctx.translate((xb+xr)/2, py0+(yb-py0)*0.5); ctx.rotate(-Math.PI/2);
+      ctx.fillStyle='rgba(195,170,245,0.85)'; ctx.font="10px 'IBM Plex Mono',monospace"; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText("bande d'instabilité", 0, 0); ctx.restore();
+    }
+    for (let i=0;i<N;i++){
+      if (stP[i]===3 || (stP[i]===2&&stEvt[i]===2)) continue;   // événement transitoire / reste compact : hors HR
+      const xx=X(Math.log10(stT[i])), yy=Y(Math.log10(Math.max(stL[i],1e-4)));
+      if(!clip(xx,yy)) continue;
+      const c=bbColor(stT[i]);
+      ctx.fillStyle='rgb('+c[0]+','+c[1]+','+c[2]+')';
+      ctx.beginPath(); ctx.arc(xx,yy, stP[i]===1?2.6:(stP[i]===2?1.3:1.6), 0,2*Math.PI); ctx.fill();
+    }
+    const sx=X(Math.log10(TSUN)), sy=Y(0);
+    if(clip(sx,sy)){ ctx.strokeStyle='#ffd23d'; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(sx-5,sy); ctx.lineTo(sx+5,sy); ctx.moveTo(sx,sy-5); ctx.lineTo(sx,sy+5); ctx.stroke(); }
+    const Mto=turnoffMass(sim.age);
+    if (Mto>MMIN && Mto<MMAX){
+      const xx=X(Math.log10(teff(Mto)));
+      ctx.strokeStyle='#e8a23d'; ctx.lineWidth=1.4; ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.moveTo(xx,py0); ctx.lineTo(xx,py0+phh); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle='#e8a23d'; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.font="11px 'IBM Plex Mono',monospace";
+      ctx.fillText('turn-off', xx, py0+3);
+    }
+    ctx.restore();
+  }
+
+  // ---------- interaction caméra ----------
+  let drag=false,lx=0,ly=0;
+  cv.addEventListener('pointerdown',e=>{ drag=true;lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove',e=>{ if(!drag)return; th+=(e.clientX-lx)*0.005; ph+=(e.clientY-ly)*0.005;
+    ph=Math.max(-1.4,Math.min(1.4,ph)); lx=e.clientX; ly=e.clientY; });
+  cv.addEventListener('pointerup',()=>{ drag=false; });
+  const sZoom=document.getElementById('sZoom'), vZoom=document.getElementById('vZoom');
+  function setZoom(z){ sim.zoom=Math.max(0.3,Math.min(4,z)); sZoom.value=sim.zoom; vZoom.textContent='×'+sim.zoom.toFixed(1); }
+  sZoom.addEventListener('input',()=>setZoom(parseFloat(sZoom.value)));
+  cv.addEventListener('wheel',e=>{ e.preventDefault(); setZoom(sim.zoom*Math.pow(0.9985,e.deltaY)); },{passive:false});
+
+  // ---------- UI ----------
+  document.getElementById('bMov').addEventListener('click',function(){
+    sim.runDyn=!sim.runDyn; this.classList.toggle('on',sim.runDyn);
+    this.textContent=sim.runDyn?'⏸ Pause mouvement':'▶ Lancer mouvement';
+  });
+  const bEvo=document.getElementById('bEvo');
+  bEvo.addEventListener('click',function(){
+    sim.runEvo=!sim.runEvo; this.classList.toggle('on',sim.runEvo);
+    this.textContent=sim.runEvo?'⏸ Pause évolution':'▶ Lancer évolution';
+  });
+  document.getElementById('bRot').addEventListener('click',function(){ sim.rotate=!sim.rotate; this.classList.toggle('on',sim.rotate); });
+  // rendu : trois modes en exclusion mutuelle (sprites / points 1px / points 2px)
+  function setMode(mo){
+    sim.mode=mo;
+    document.getElementById('bRSpr').classList.toggle('on',mo==='sprites');
+    document.getElementById('bRP1').classList.toggle('on',mo==='p1');
+    document.getElementById('bRP2').classList.toggle('on',mo==='p2');
+  }
+  document.getElementById('bRSpr').addEventListener('click',()=>setMode('sprites'));
+  document.getElementById('bRP1').addEventListener('click',()=>setMode('p1'));
+  document.getElementById('bRP2').addEventListener('click',()=>setMode('p2'));
+  document.getElementById('bHR').addEventListener('click',function(){ sim.showHR=!sim.showHR; this.classList.toggle('on',sim.showHR); });
+  document.getElementById('bGen').addEventListener('click',()=>genCluster(N));
+  const bDoc=document.getElementById('bDoc'), docOverlay=document.getElementById('docOverlay'), docClose=document.getElementById('docClose');
+  function setDoc(open){ docOverlay.classList.toggle('show',open); bDoc.classList.toggle('on',open); }
+  bDoc.addEventListener('click',()=>setDoc(!docOverlay.classList.contains('show')));
+  docClose.addEventListener('click',()=>setDoc(false));
+  docOverlay.addEventListener('click',e=>{ if(e.target===docOverlay) setDoc(false); });
+  window.addEventListener('keydown',e=>{ if(e.key==='Escape') setDoc(false); });
+  const sN=document.getElementById('sN'), vN=document.getElementById('vN');
+  sN.addEventListener('input',()=>{ vN.textContent=sN.value; genCluster(parseInt(sN.value,10)); });
+  const sSpd=document.getElementById('sSpd'), vSpd=document.getElementById('vSpd');
+  const SPEEDS=[0.1,0.2,0.5,1,2,4,8];   // ralenti (0.1-0.5) pour observer les pulsations, accéléré (2-8) pour balayer
+  sSpd.addEventListener('input',()=>{ sim.speed=SPEEDS[parseInt(sSpd.value,10)]; vSpd.textContent='×'+sim.speed; });
+  const sDyn=document.getElementById('sDyn'), vDyn=document.getElementById('vDyn');
+  sDyn.addEventListener('input',()=>{ sim.dyn=parseInt(sDyn.value,10); vDyn.textContent=sim.dyn; });
+  const sLum=document.getElementById('sLum'), vLum=document.getElementById('vLum');
+  sLum.addEventListener('input',()=>{ sim.lum=parseFloat(sLum.value); vLum.textContent='×'+sim.lum.toFixed(1); });
+
+  // ---------- boucle ----------
+  const rN=document.getElementById('rN'), rAge=document.getElementById('rAge'), rTd=document.getElementById('rTd'), rTO=document.getElementById('rTO'),
+        rMS=document.getElementById('rMS'), rG=document.getElementById('rG'), rW=document.getElementById('rW'), rVar=document.getElementById('rVar');
+  let last=performance.now(), frame=0;
+    // --- badge fps | p/g : % du temps de frame en physique / en affichage (CPU exhaustif en Canvas 2D) ---
+  const fpsEl=document.getElementById('fps');
+  let _fT=0,_fN=0,_fLast=performance.now(),_msP=0,_msG=0;
+  function _fpsTick(){
+    const _now=performance.now(); _fT+=(_now-_fLast)/1000; _fLast=_now; _fN++;
+    if (_fT>=0.5){
+      const f=Math.round(_fN/_fT), avg=_fT*1000/_fN;
+      fpsEl.textContent=f+' fps | '+Math.min(99,Math.round(_msP/avg*100))+'/'+Math.min(99,Math.round(_msG/avg*100));
+      fpsEl.title='% du temps de frame : physique / affichage';
+      fpsEl.classList.toggle('low',f<30);
+      _fT=0;_fN=0;
+    }
+  }
+
+  function loop(now){
+    const dt=Math.min((now-last)/1000,0.05); last=now;
+    tPuls+=dt;   // horloge propre des pulsations (temps réel, indépendante des deux horloges)
+    _fpsTick();
+    let _t0=performance.now();
+    if (sim.runEvo && sim.age<AGE_MAX){
+      sim.age*=Math.exp(EVRATE*sim.speed*dt);
+      if(sim.age>=AGE_MAX){ sim.age=AGE_MAX; sim.runEvo=false; bEvo.classList.remove('on'); bEvo.textContent='▶ Lancer évolution'; }  // fin : on fige l'âge et on stoppe (les événements s'éteignent)
+    }
+    if (sim.runDyn){ for (let s=0;s<sim.dyn;s++) stepDynamics(DT_DYN); }
+    _msP=_msP*0.9+(performance.now()-_t0)*0.1; _t0=performance.now();
+    if (sim.rotate) th+=0.0025;
+    project();
+    renderCluster();
+    if (sim.showHR) drawHR();
+    if ((frame++ & 7)===0){
+      let nms=0,ng=0,nw=0,nv=0; for(let i=0;i<N;i++){ if(stVar[i])nv++; if(stP[i]===0)nms++; else if(stP[i]===1)ng++; else if(stP[i]===2&&stEvt[i]!==2)nw++; }
+      const Mto=turnoffMass(sim.age);
+      rN.textContent=N; rAge.textContent=fmtAge(sim.age);
+      rTd.textContent=(sim.tdyn/TCROSS).toFixed(1);
+      rTO.textContent = (Mto>=MMAX) ? '> '+MMAX.toFixed(0)+' M\u2609 (aucune partie)'
+                       : Mto.toFixed(2)+' M\u2609  ['+specType(teff(Mto))+']';
+      rMS.textContent=nms; rG.textContent=ng; rW.textContent=nw; rVar.textContent=nv;
+    }
+    _msG=_msG*0.9+(performance.now()-_t0)*0.1;
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- démarrage ----------
+  resize();
+  genCluster(N);
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amas globulaire — modèle de Plummer (palier 1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#05070d; --panel:#0e1524; --panel2:#131d31;
+    --ink:#cdd8ec; --ink-dim:#7d8aa3; --line:#22304c;
+    --accent:#e8a23d; --accent-d:#b97c24;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:'IBM Plex Sans',sans-serif;overflow:hidden;}
+  #stage{position:fixed;inset:0;}
+  canvas{position:absolute;inset:0;display:block;touch-action:none;cursor:grab;}
+  canvas:active{cursor:grabbing;}
+
+  #panel{position:fixed;top:14px;left:14px;width:252px;
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:10px;
+    padding:14px 14px 12px;box-shadow:0 10px 40px rgba(0,0,0,.55);
+    user-select:none;backdrop-filter:blur(2px);}
+  #panel h1{font-size:12px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 2px;font-weight:600;}
+  #panel .sub{font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+    color:var(--ink-dim);margin:0 0 12px;letter-spacing:.02em;}
+
+  .row{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
+  button{flex:1 1 auto;min-width:0;background:#16223a;color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:7px 6px;
+    font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:500;
+    cursor:pointer;transition:background .12s,border-color .12s,color .12s;}
+  button:hover{background:#1d2c49;border-color:#33476e;}
+  button:active{transform:translateY(1px);}
+  button.on{background:var(--accent);border-color:var(--accent-d);color:#1a1205;font-weight:600;}
+
+  .slider{margin:9px 0 2px;}
+  .slider label{display:flex;justify-content:space-between;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);
+    margin-bottom:3px;}
+  .slider label b{color:var(--ink);font-weight:500;}
+  input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:4px;
+    background:var(--line);border-radius:3px;outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid #1a2438;}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:var(--accent);cursor:pointer;border:2px solid #1a2438;}
+
+  #readout{margin-top:11px;padding-top:10px;border-top:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.7;color:var(--ink-dim);}
+  #readout span{color:var(--ink);}
+  #readout .vir{color:var(--accent);}
+  #sig{margin-top:10px;padding-top:9px;border-top:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-dim);
+    text-align:center;letter-spacing:.03em;}
+
+  #hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);
+    background:rgba(14,21,36,.7);border:1px solid var(--line);border-radius:20px;
+    padding:6px 16px;backdrop-filter:blur(2px);}
+  #hint b{color:var(--accent);font-weight:500;}
+
+  #fps{position:fixed;top:14px;right:14px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);
+    background:rgba(14,21,36,.7);border:1px solid var(--line);border-radius:6px;
+    padding:5px 10px;backdrop-filter:blur(2px);}
+  #fps.low{color:var(--accent);border-color:var(--accent-d);}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas></div>
+
+<div id="panel">
+  <h1>Amas globulaire</h1>
+  <p class="sub">Plummer · N-corps 1/r² · unités N-body</p>
+
+  <div class="row">
+    <button id="bRun" class="on">⏸ Pause</button>
+    <button id="bGen">⟳ Régénérer</button>
+  </div>
+  <div class="row">
+    <button id="bRot">Rotation auto</button>
+  </div>
+  <div class="row">
+    <button id="bRSpr" class="on">Sprites</button>
+    <button id="bRP1">Points</button>
+    <button id="bRP2">Points 2px</button>
+  </div>
+
+  <div class="slider">
+    <label>Étoiles N <b id="vN">1000</b></label>
+    <input type="range" id="sN" min="200" max="3000" value="1000" step="100">
+  </div>
+  <div class="slider">
+    <label>Vitesse d'évolution <b id="vSpd">1</b></label>
+    <input type="range" id="sSpd" min="1" max="8" value="1" step="1">
+  </div>
+  <div class="slider">
+    <label>Échelle vue <b id="vZoom">×1.0</b></label>
+    <input type="range" id="sZoom" min="0.3" max="4" value="1" step="0.1">
+  </div>
+  <div class="slider">
+    <label>Luminosité (points) <b id="vLum">×2.0</b></label>
+    <input type="range" id="sLum" min="0.2" max="4" value="2" step="0.1">
+  </div>
+
+  <div id="readout">
+    N : <span id="rN">0</span><br>
+    temps : <span id="rT">0.00</span> (t<sub>cr</sub>)<br>
+    E cinétique : <span id="rK">0</span><br>
+    E potentielle : <span id="rP">0</span><br>
+    E totale : <span id="rE">0</span><br>
+    viriel 2K+U : <span id="rV" class="vir">0</span>
+  </div>
+  <p id="sig">Pierre Revel + Claude 2026</p>
+</div>
+
+<div id="hint">Glisser pour tourner l'amas · molette pour <b>zoomer</b></div>
+<div id="fps">— fps</div>
+
+
+<script>
+'use strict';
+(function(){
+
+  // ====================================================================
+  // UNITÉS N-BODY (Hénon) : G = 1, masse totale M = 1, énergie E = -1/4.
+  // Le rayon d'échelle de Plummer vaut alors A = 3π/16 ≈ 0.589,
+  // le temps de croisement ≈ 2π. Tout est exprimé là-dedans.
+  // ====================================================================
+  const G    = 1.0;
+  const A    = 3*Math.PI/16;     // échelle de Plummer
+  const EPS  = 0.03;             // softening (système sans collision)
+  const EPS2 = EPS*EPS;
+  const DT   = 0.01;             // pas de temps fixe
+
+  // --- IMF (Salpeter tronquée) : beaucoup de petites étoiles, peu de grosses
+  const MMIN = 0.5, MMAX = 50, ALPHA = 2.35;
+
+  // --- état (Structure of Arrays : bien plus rapide que des objets en O(n²)) ---
+  let N = 1000;
+  let px,py,pz, vx,vy,vz, mass, ax,ay,az, cbin, sxBuf, syBuf;
+  let potential = 0, simTime = 0;
+
+  const sim = { running:true, speed:1, zoom:1.0, rotate:false, mode:'sprites', lum:2.0 };
+
+  // ---------- canvas + DPR ----------
+  const cv  = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  let W=0, H=0, DPR=1, baseScale=120, cx=0, cy=0;
+
+  // --- rendu points : buffer d'accumulation additif + tone-mapping ---
+  let accW=0, accH=0, accBuf, accImg, accData;
+  const accCanvas=document.createElement('canvas'), accCtx=accCanvas.getContext('2d');
+  const LUTN=1024, ACCMAX=8, EXPO=1.0, IDX=LUTN/ACCMAX, SPRITE_BIN=11;  // classes ≥ SPRITE_BIN : halo en sprite
+  const toneLUT=new Uint8Array(LUTN);   // v accumulé -> luminosité 0..255, courbe 255·(1-e^{-v})
+  for (let k=0;k<LUTN;k++) toneLUT[k]=Math.round(255*(1-Math.exp(-(k/LUTN*ACCMAX)*EXPO)));
+
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+    cv.style.width = W+'px'; cv.style.height = H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    baseScale = Math.min(W,H)/7;   // px par unité N-body, à la vue ×1
+    cx = W/2; cy = H/2;
+    // buffer d'accumulation (rendu points) en résolution CSS
+    accW=W; accH=H;
+    accCanvas.width=accW; accCanvas.height=accH;
+    accImg=accCtx.createImageData(accW,accH); accData=accImg.data;
+    accBuf=new Float32Array(accW*accH*3);
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- sprites d'étoiles (générés une fois, réutilisés) ----------
+  const NB = 16;                  // nombre de classes de couleur
+  const sprites = [];
+  function starColor(t){          // 0 rouge (M) -> 0.5 blanc (G) -> 1 bleu (O/B) ; écart accentué
+    let r,g,b;
+    if (t<0.5){ const k=t/0.5;       r=255;        g=100+150*k; b=60+175*k; }
+    else      { const k=(t-0.5)/0.5; r=255-115*k;  g=250-65*k;  b=235+20*k; }
+    return [Math.round(r),Math.round(g),Math.round(b)];
+  }
+  function makeSprite(c){
+    const s=64, q=document.createElement('canvas'); q.width=q.height=s;
+    const g2=q.getContext('2d');
+    const grad=g2.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+    const rgb=c[0]+','+c[1]+','+c[2];
+    grad.addColorStop(0,   'rgba('+rgb+',1)');
+    grad.addColorStop(0.08,'rgba('+rgb+',1)');      // plateau : coeur net (réduit)
+    grad.addColorStop(0.24,'rgba('+rgb+',0.48)');   // point MÉDIAN ancien/resserré
+    grad.addColorStop(0.45,'rgba('+rgb+',0.22)');
+    grad.addColorStop(0.70,'rgba('+rgb+',0.10)');
+    grad.addColorStop(1,   'rgba('+rgb+',0)');
+    g2.fillStyle=grad; g2.beginPath(); g2.arc(s/2,s/2,s/2,0,2*Math.PI); g2.fill();
+    return q;
+  }
+  for (let b=0;b<NB;b++) sprites.push(makeSprite(starColor(b/(NB-1))));
+  const binR=[],binG=[],binB=[];  // couleur normalisée 0..1, pour le splatting additif
+  for (let b=0;b<NB;b++){ const c=starColor(b/(NB-1)); binR.push(c[0]/255); binG.push(c[1]/255); binB.push(c[2]/255); }
+
+  // ---------- générateur d'état initial : modèle de Plummer ----------
+  function rnd(){ return Math.random(); }
+
+  function genCluster(n){
+    N=n;
+    px=new Float64Array(N); py=new Float64Array(N); pz=new Float64Array(N);
+    vx=new Float64Array(N); vy=new Float64Array(N); vz=new Float64Array(N);
+    ax=new Float64Array(N); ay=new Float64Array(N); az=new Float64Array(N);
+    mass=new Float64Array(N); cbin=new Uint8Array(N);
+    sxBuf=new Float32Array(N); syBuf=new Float32Array(N);   // positions écran (pré-projection)
+
+    // --- masses : loi de puissance dN/dm ∝ m^(-α), tirée par inversion ---
+    const e=1-ALPHA, lo=Math.pow(MMIN,e), hi=Math.pow(MMAX,e);
+    const raw=new Float64Array(N); let sum=0;
+    for (let i=0;i<N;i++){ raw[i]=Math.pow(lo+rnd()*(hi-lo),1/e); sum+=raw[i]; }
+    for (let i=0;i<N;i++) mass[i]=raw[i]/sum;     // normalisé : Σm = 1 (potentiel de Plummer)
+    // classe de couleur d'après log(masse)
+    const lmin=Math.log(MMIN), lmax=Math.log(MMAX);
+    for (let i=0;i<N;i++){
+      let t=(Math.log(raw[i])-lmin)/(lmax-lmin);
+      cbin[i]=Math.max(0,Math.min(NB-1,Math.round(t*(NB-1))));
+    }
+
+    for (let i=0;i<N;i++){
+      // --- position : inversion de M(r)/M = r³/(r²+A²)^{3/2} ---
+      let r;
+      do { const X=rnd(); r=A/Math.sqrt(Math.pow(X,-2/3)-1); } while (!(r<8*A)); // tronque les fuyards
+      let u=2*rnd()-1, ph=2*Math.PI*rnd(), s=Math.sqrt(1-u*u);
+      px[i]=r*s*Math.cos(ph); py[i]=r*s*Math.sin(ph); pz[i]=r*u;
+
+      // --- vitesse : f(v) ∝ v²(1-v²/v_e²)^{7/2}, tirée par rejet ; v_e = vitesse d'échappement ---
+      const ve=Math.SQRT2*Math.pow(r*r+A*A,-0.25);        // v_e = √2 (r²+A²)^{-1/4}
+      let q,gg;
+      do { q=rnd(); gg=0.1*rnd(); } while (gg > q*q*Math.pow(1-q*q,3.5));  // g_max ≈ 0.092
+      const v=q*ve;
+      u=2*rnd()-1; ph=2*Math.PI*rnd(); s=Math.sqrt(1-u*u);
+      vx[i]=v*s*Math.cos(ph); vy[i]=v*s*Math.sin(ph); vz[i]=v*u;
+    }
+
+    // --- recentrer : annuler la position et la vitesse du centre de masse ---
+    let MX=0,MY=0,MZ=0,VX=0,VY=0,VZ=0,MT=0;
+    for (let i=0;i<N;i++){
+      MT+=mass[i];
+      MX+=mass[i]*px[i]; MY+=mass[i]*py[i]; MZ+=mass[i]*pz[i];
+      VX+=mass[i]*vx[i]; VY+=mass[i]*vy[i]; VZ+=mass[i]*vz[i];
+    }
+    MX/=MT;MY/=MT;MZ/=MT;VX/=MT;VY/=MT;VZ/=MT;
+    for (let i=0;i<N;i++){
+      px[i]-=MX;py[i]-=MY;pz[i]-=MZ;
+      vx[i]-=VX;vy[i]-=VY;vz[i]-=VZ;
+    }
+    simTime=0;
+  }
+
+  // ---------- physique : accélérations en 1/r² + énergie potentielle ----------
+  function computeAccel(){
+    ax.fill(0); ay.fill(0); az.fill(0);
+    let U=0;
+    for (let i=0;i<N;i++){
+      const xi=px[i],yi=py[i],zi=pz[i],mi=mass[i];
+      let axi=0,ayi=0,azi=0;
+      for (let j=i+1;j<N;j++){
+        const dx=px[j]-xi, dy=py[j]-yi, dz=pz[j]-zi;
+        const r2=dx*dx+dy*dy+dz*dz+EPS2;
+        const inv=1/Math.sqrt(r2), inv3=inv/r2;
+        const fmj=G*mass[j]*inv3, fmi=G*mi*inv3;
+        axi+=fmj*dx; ayi+=fmj*dy; azi+=fmj*dz;
+        ax[j]-=fmi*dx; ay[j]-=fmi*dy; az[j]-=fmi*dz;   // action = réaction
+        U-=G*mi*mass[j]*inv;
+      }
+      ax[i]+=axi; ay[i]+=ayi; az[i]+=azi;
+    }
+    potential=U;
+  }
+
+  function step(h){
+    computeAccel();
+    for (let i=0;i<N;i++){           // Euler-Cromer (semi-implicite)
+      vx[i]+=ax[i]*h; vy[i]+=ay[i]*h; vz[i]+=az[i]*h;
+      px[i]+=vx[i]*h; py[i]+=vy[i]*h; pz[i]+=vz[i]*h;
+    }
+    simTime+=h;
+  }
+
+  function kinetic(){
+    let K=0;
+    for (let i=0;i<N;i++) K+=mass[i]*(vx[i]*vx[i]+vy[i]*vy[i]+vz[i]*vz[i]);
+    return 0.5*K;
+  }
+
+  // ---------- rendu : projection orthographique + blending additif ----------
+  let th=0.6, ph=0.35;   // azimut, élévation de la caméra
+  function render(){
+    ctx.globalCompositeOperation='source-over';
+    ctx.fillStyle='#05070d'; ctx.fillRect(0,0,W,H);
+    const scale=baseScale*sim.zoom;
+    const ct=Math.cos(th), st=Math.sin(th), cp=Math.cos(ph), sp=Math.sin(ph);
+    // pré-projection orthographique (faite une seule fois, partagée par les deux rendus)
+    for (let i=0;i<N;i++){
+      const x=px[i],y=py[i],z=pz[i];
+      const xr= x*ct + z*st;        // azimut (autour de y)
+      const zr=-x*st + z*ct;
+      const yr= y*cp - zr*sp;       // élévation (autour de x)
+      sxBuf[i]=cx + xr*scale;
+      syBuf[i]=cy - yr*scale;
+    }
+    if (sim.mode!=='sprites'){
+      accBuf.fill(0);
+      const P2 = (sim.mode==='p2');   // noyau : tente 3x3 (2x2 px lissé, flux x4) ou bilinéaire 1 px
+      for (let i=0;i<N;i++){
+        const sx=sxBuf[i], sy=syBuf[i];
+        if (sx<1||sy<1||sx>=accW-1||sy>=accH-1) continue;
+        const ix=sx|0, iy=sy|0, fx=sx-ix, fy=sy-iy, b=cbin[i];
+        const lum=sim.lum*Math.sqrt(mass[i]*N);          // flux ~ luminosité de l'étoile
+        const r=binR[b]*lum, g=binG[b]*lum, bl=binB[b]*lum;
+        if (P2){
+          const hx0=1-fx, hx2=fx, hy0=1-fy, hy2=fy;       // poids tente : (1-f, 1, f)
+          for (let dy=-1; dy<=1; dy++){
+            const wy = dy<0?hy0 : dy>0?hy2 : 1;
+            if (wy===0) continue;
+            let p=((iy+dy)*accW+ix-1)*3;
+            const w0=hx0*wy, w1=wy, w2=hx2*wy;
+            accBuf[p]+=r*w0; accBuf[p+1]+=g*w0; accBuf[p+2]+=bl*w0;
+            accBuf[p+3]+=r*w1; accBuf[p+4]+=g*w1; accBuf[p+5]+=bl*w1;
+            accBuf[p+6]+=r*w2; accBuf[p+7]+=g*w2; accBuf[p+8]+=bl*w2;
+          }
+        } else {
+          const w00=(1-fx)*(1-fy), w10=fx*(1-fy), w01=(1-fx)*fy, w11=fx*fy;
+          let p=(iy*accW+ix)*3;     accBuf[p]+=r*w00; accBuf[p+1]+=g*w00; accBuf[p+2]+=bl*w00;
+          p=(iy*accW+ix+1)*3;       accBuf[p]+=r*w10; accBuf[p+1]+=g*w10; accBuf[p+2]+=bl*w10;
+          p=((iy+1)*accW+ix)*3;     accBuf[p]+=r*w01; accBuf[p+1]+=g*w01; accBuf[p+2]+=bl*w01;
+          p=((iy+1)*accW+ix+1)*3;   accBuf[p]+=r*w11; accBuf[p+1]+=g*w11; accBuf[p+2]+=bl*w11;
+        }
+      }
+      // tone-mapping : les flux sommés deviennent des couleurs ; le cœur dense sature en blanc
+      const data=accData, buf=accBuf, n=accW*accH;
+      for (let q=0,p=0,di=0; q<n; q++,p+=3,di+=4){
+        let v=buf[p]*IDX;   data[di]  = toneLUT[v<LUTN?(v|0):LUTN-1];
+        v=buf[p+1]*IDX;     data[di+1]= toneLUT[v<LUTN?(v|0):LUTN-1];
+        v=buf[p+2]*IDX;     data[di+2]= toneLUT[v<LUTN?(v|0):LUTN-1];
+        data[di+3]=255;
+      }
+      accCtx.putImageData(accImg,0,0);
+      ctx.drawImage(accCanvas,0,0,W,H);
+      // halo en sprite pour les rares géantes bleues (classes élevées) : elles ressortent en relief
+      ctx.globalCompositeOperation='lighter';
+      for (let i=0;i<N;i++){
+        if (cbin[i]<SPRITE_BIN) continue;
+        const sx=sxBuf[i], sy=syBuf[i];
+        if (sx<-40||sy<-40||sx>W+40||sy>H+40) continue;
+        const sz=0.65*Math.pow(mass[i]*N,0.7)*sim.zoom;
+        ctx.drawImage(sprites[cbin[i]], sx-sz, sy-sz, sz*2, sz*2);
+      }
+      ctx.globalCompositeOperation='source-over';
+    } else {
+      // rendu sprites : halo additif (plus joli, plus lourd)
+      ctx.globalCompositeOperation='lighter';
+      for (let i=0;i<N;i++){
+        const sz=2.2*Math.cbrt(mass[i]*N)*sim.zoom;
+        ctx.drawImage(sprites[cbin[i]], sxBuf[i]-sz, syBuf[i]-sz, sz*2, sz*2);
+      }
+      ctx.globalCompositeOperation='source-over';
+    }
+  }
+
+  // ---------- interaction : rotation à la souris, zoom à la molette ----------
+  let drag=false, lx=0, ly=0;
+  cv.addEventListener('pointerdown',function(e){ drag=true; lx=e.clientX; ly=e.clientY; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove',function(e){
+    if(!drag) return;
+    th+=(e.clientX-lx)*0.005; ph+=(e.clientY-ly)*0.005;
+    ph=Math.max(-1.4,Math.min(1.4,ph));
+    lx=e.clientX; ly=e.clientY;
+  });
+  cv.addEventListener('pointerup',function(){ drag=false; });
+  const sZoom=document.getElementById('sZoom'), vZoom=document.getElementById('vZoom');
+  function setZoom(z){ sim.zoom=Math.max(0.3,Math.min(4,z)); sZoom.value=sim.zoom; vZoom.textContent='×'+sim.zoom.toFixed(1); }
+  sZoom.addEventListener('input',function(){ setZoom(parseFloat(sZoom.value)); });
+  cv.addEventListener('wheel',function(e){ e.preventDefault(); setZoom(sim.zoom*Math.pow(0.9985,e.deltaY)); }, {passive:false});
+
+  // ---------- UI ----------
+  document.getElementById('bRun').addEventListener('click',function(){
+    sim.running=!sim.running; this.classList.toggle('on',sim.running);
+    this.textContent=sim.running?'⏸ Pause':'▶ Lancer';
+  });
+  document.getElementById('bRot').addEventListener('click',function(){
+    sim.rotate=!sim.rotate; this.classList.toggle('on',sim.rotate);
+  });
+  // rendu : trois modes en exclusion mutuelle (sprites / points 1px / points 2px)
+  function setMode(mo){
+    sim.mode=mo;
+    document.getElementById('bRSpr').classList.toggle('on',mo==='sprites');
+    document.getElementById('bRP1').classList.toggle('on',mo==='p1');
+    document.getElementById('bRP2').classList.toggle('on',mo==='p2');
+  }
+  document.getElementById('bRSpr').addEventListener('click',()=>setMode('sprites'));
+  document.getElementById('bRP1').addEventListener('click',()=>setMode('p1'));
+  document.getElementById('bRP2').addEventListener('click',()=>setMode('p2'));
+  document.getElementById('bGen').addEventListener('click',function(){ genCluster(N); });
+  const sN=document.getElementById('sN'), vNel=document.getElementById('vN');
+  sN.addEventListener('input',function(){ vNel.textContent=sN.value; genCluster(parseInt(sN.value,10)); });
+  const sSpd=document.getElementById('sSpd'), vSpd=document.getElementById('vSpd');
+  sSpd.addEventListener('input',function(){ sim.speed=parseInt(sSpd.value,10); vSpd.textContent=sim.speed; });
+  const sLum=document.getElementById('sLum'), vLum=document.getElementById('vLum');
+  sLum.addEventListener('input',function(){ sim.lum=parseFloat(sLum.value); vLum.textContent='×'+sim.lum.toFixed(1); });
+
+  // ---------- boucle ----------
+  const rN=document.getElementById('rN'), rT=document.getElementById('rT'),
+        rK=document.getElementById('rK'), rP=document.getElementById('rP'),
+        rE=document.getElementById('rE'), rV=document.getElementById('rV');
+  let frame=0;
+    // --- badge fps | p/g : % du temps de frame en physique / en affichage (CPU exhaustif en Canvas 2D) ---
+  const fpsEl=document.getElementById('fps');
+  let _fT=0,_fN=0,_fLast=performance.now(),_msP=0,_msG=0;
+  function _fpsTick(){
+    const _now=performance.now(); _fT+=(_now-_fLast)/1000; _fLast=_now; _fN++;
+    if (_fT>=0.5){
+      const f=Math.round(_fN/_fT), avg=_fT*1000/_fN;
+      fpsEl.textContent=f+' fps | '+Math.min(99,Math.round(_msP/avg*100))+'/'+Math.min(99,Math.round(_msG/avg*100));
+      fpsEl.title='% du temps de frame : physique / affichage';
+      fpsEl.classList.toggle('low',f<30);
+      _fT=0;_fN=0;
+    }
+  }
+
+  function loop(){
+    _fpsTick();
+    let _t0=performance.now();
+    if (sim.running) for (let s=0;s<sim.speed;s++) step(DT);
+    _msP=_msP*0.9+(performance.now()-_t0)*0.1; _t0=performance.now();
+    if (sim.rotate)  th+=0.0025;
+    render();
+    if ((frame++ & 7)===0){            // lecture rafraîchie ~8 fois/s
+      const K=kinetic(), U=potential;
+      rN.textContent=N;
+      rT.textContent=(simTime/(2*Math.PI)).toFixed(2);
+      rK.textContent=K.toFixed(4);
+      rP.textContent=U.toFixed(4);
+      rE.textContent=(K+U).toFixed(4);
+      rV.textContent=(2*K+U).toFixed(4);
+    }
+    _msG=_msG*0.9+(performance.now()-_t0)*0.1;
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- démarrage ----------
+  resize();
+  genCluster(N);
+  computeAccel();        // initialise le potentiel pour la première lecture
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>

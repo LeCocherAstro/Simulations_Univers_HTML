@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nébuleuse — naissance d'un amas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070b14; --panel:#0e1524; --panel2:#131d31;
+    --ink:#cdd8ec; --ink-dim:#7d8aa3; --line:#22304c;
+    --accent:#e8a23d; --accent-d:#b97c24;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:'IBM Plex Sans',sans-serif;overflow:hidden;}
+  #cv{position:fixed;inset:0;display:block;touch-action:none;}
+
+  #panel{position:fixed;top:14px;left:14px;width:248px;
+    max-height:calc(100vh - 28px);overflow-y:auto;
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:10px;
+    padding:14px 14px 12px;box-shadow:0 10px 40px rgba(0,0,0,.55);
+    user-select:none;backdrop-filter:blur(2px);}
+  #panel h1{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 2px;font-weight:600;}
+  #panel .sub{font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+    color:var(--ink-dim);margin:0 0 12px;letter-spacing:.02em;}
+
+  .row{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
+  button{flex:1 1 auto;min-width:0;background:#16223a;color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:7px 6px;
+    font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:500;
+    cursor:pointer;transition:background .12s,border-color .12s,color .12s;}
+  button:hover{background:#1d2c49;border-color:#33476e;}
+  button:active{transform:translateY(1px);}
+  button.on{background:var(--accent);border-color:var(--accent-d);color:#1a1205;font-weight:600;}
+
+  .slider{margin:9px 0 2px;}
+  .slider label{display:flex;justify-content:space-between;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);
+    margin-bottom:3px;}
+  .slider label b{color:var(--ink);font-weight:500;}
+  input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:4px;
+    background:var(--line);border-radius:3px;outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer;
+    border:2px solid #1a2438;}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:var(--accent);cursor:pointer;border:2px solid #1a2438;}
+
+  #readout{margin-top:11px;padding-top:10px;border-top:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.7;color:var(--ink-dim);}
+  #readout span{color:var(--ink);}
+  #sig{margin-top:10px;padding-top:9px;border-top:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-dim);
+    text-align:center;letter-spacing:.03em;}
+
+  #hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);
+    background:rgba(14,21,36,.7);border:1px solid var(--line);border-radius:20px;
+    padding:6px 16px;backdrop-filter:blur(2px);white-space:nowrap;}
+  #hint b{color:var(--accent);font-weight:500;}
+
+  #fps{position:fixed;top:14px;right:14px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-dim);
+    background:rgba(14,21,36,.7);border:1px solid var(--line);border-radius:6px;
+    padding:5px 10px;backdrop-filter:blur(2px);}
+  #fps.low{color:var(--accent);border-color:var(--accent-d);}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="panel">
+  <h1>Nébuleuse</h1>
+  <p class="sub">effondrement · fragmentation · Barnes-Hut</p>
+
+  <div class="row">
+    <button id="bRun" class="on">⏸ Pause</button>
+    <button id="bNew">⟳ Nouveau nuage</button>
+  </div>
+
+  <div class="slider">
+    <label>Pression (c²) <b id="vK">3.0</b></label>
+    <input type="range" id="sK" min="1" max="8" value="3" step="0.2">
+  </div>
+  <div class="slider">
+    <label>Feedback stellaire <b id="vFB">1.3</b></label>
+    <input type="range" id="sFB" min="0" max="2.5" value="1.3" step="0.1">
+  </div>
+  <div class="slider">
+    <label>Ancrage (halo) <b id="vAn">0.5</b></label>
+    <input type="range" id="sAn" min="0" max="1.5" value="0.5" step="0.05">
+  </div>
+  <div class="slider">
+    <label>Rotation initiale <b id="vRot">0.9</b></label>
+    <input type="range" id="sRot" min="0" max="2" value="0.9" step="0.1">
+  </div>
+  <div class="slider">
+    <label>Turbulence initiale <b id="vTurb">0.25</b></label>
+    <input type="range" id="sTurb" min="0" max="0.6" value="0.25" step="0.05">
+  </div>
+  <div class="slider">
+    <label>Particules de gaz <b id="vN">3000</b></label>
+    <input type="range" id="sN" min="600" max="16000" value="3000" step="200">
+  </div>
+  <div class="slider">
+    <label>Vitesse <b id="vSpd">×1</b></label>
+    <input type="range" id="sSpd" min="1" max="3" value="1" step="1">
+  </div>
+
+  <div id="readout">
+    gaz : <span id="rGas">0</span><br>
+    étoiles : <span id="rStars">0</span><br>
+    masse en étoiles : <span id="rEff">0 %</span>
+  </div>
+  <p id="sig">Pierre Revel + Claude 2026</p>
+</div>
+
+<div id="hint">glisser : <b>déplacer</b> · molette : <b>zoom</b> · rotation/turbulence/N s'appliquent au <b>prochain nuage</b></div>
+<div id="fps">— fps</div>
+
+<script>
+'use strict';
+(function(){
+
+  // ============================================================
+  // MODÈLE (volontairement minimal — chaque raccourci est assumé)
+  //  - gravité auto-cohérente toutes-paires, adoucie (Plummer)
+  //  - gaz ISOTHERME : pression = répulsion courte portée (SPH du pauvre).
+  //    Physiquement motivé : un nuage moléculaire refroidit si bien qu'il
+  //    reste à ~10 K pendant tout l'effondrement initial.
+  //  - VISCOSITÉ sur les paires convergentes : sans dissipation le nuage
+  //    rebondit élastiquement au lieu de fragmenter (équivalent light de
+  //    la viscosité artificielle SPH).
+  //  - PARTICULES-PUITS (sinks) : un grumeau dépassant le seuil de densité
+  //    devient une étoile qui accrète — LE raccourci des simulations pro
+  //    (Bate, Bonnell) pour éviter de résoudre l'intérieur des protoétoiles.
+  //  - FEEDBACK : la force étoile->gaz est multipliée par (1-FB) ; FB>1 la
+  //    rend répulsive (rayonnement/vents). C'est lui qui limite l'efficacité
+  //    de formation et creuse les bulles, comme dans les régions HII.
+  // Ce qui reste FAUX : échelles de temps compressées, pas de champ
+  // magnétique ni de vrai rayonnement, fonction de masse sans valeur,
+  // 2D au lieu de 3D. C'est une illustration mécaniste, pas une expérience.
+  // ============================================================
+
+  const NMAX=16000, R=300, G=0.05, EPS2=16, H=14, DT=1;
+  const sim={ running:true, K:3.0e-3, FB:1.3, OMEGA:0.9e-3, TURB:0.25,
+              N0:3000, speed:1, anchor:0.5 };
+
+  let n=0;
+  const x=new Float64Array(NMAX), y=new Float64Array(NMAX),
+        vx=new Float64Array(NMAX), vy=new Float64Array(NMAX),
+        m=new Float64Array(NMAX), star=new Uint8Array(NMAX),
+        ax=new Float64Array(NMAX), ay=new Float64Array(NMAX),
+        nb=new Int32Array(NMAX);
+  const NCR=24;                       // seuil de formation (voisins dans H)
+
+  // ---------- nuage initial : disque + rotation solide + turbulence ----------
+  // Le rayon croît en √N : densité de SURFACE constante, donc même physique de
+  // Jeans (le tuning pression/gravité reste valable de 600 à 8000 particules).
+  function newCloud(){
+    n=sim.N0;
+    sim.Rc=R*Math.sqrt(sim.N0/1000);
+    const Rc=sim.Rc;
+    const ph=[Math.random()*6.28,Math.random()*6.28,Math.random()*6.28];
+    for (let i=0;i<n;i++){
+      const r=Rc*Math.sqrt(Math.random()), a=Math.random()*2*Math.PI;
+      x[i]=r*Math.cos(a); y[i]=r*Math.sin(a); m[i]=1; star[i]=0;
+      vx[i]=-sim.OMEGA*y[i]; vy[i]=sim.OMEGA*x[i];
+      const u=x[i]/Rc*Math.PI, v=y[i]/Rc*Math.PI;
+      vx[i]+=sim.TURB*(Math.sin(2*v+ph[0])+0.6*Math.sin(3*u+ph[1]));
+      vy[i]+=sim.TURB*(Math.sin(1*u+ph[1])+0.6*Math.sin(3*v+ph[2]));
+    }
+    forces();                          // amorce le leapfrog
+  }
+
+  function remove(i){ n--; x[i]=x[n];y[i]=y[n];vx[i]=vx[n];vy[i]=vy[n];m[i]=m[n];star[i]=star[n]; }
+
+  // ---------- grille de voisinage (cellules de côté H) ----------
+  const grid=new Map();
+  function gkey(cx,cy){ return cx*100003+cy; }
+  function buildGrid(){
+    grid.clear();
+    for (let i=0;i<n;i++){
+      const k=gkey(Math.floor(x[i]/H),Math.floor(y[i]/H));
+      let l=grid.get(k); if(!l){l=[];grid.set(k,l);} l.push(i);
+    }
+  }
+
+  // ---------- Barnes-Hut : quadtree en tableaux plats (zéro allocation d'objet) ----------
+  // Gaz-gaz via l'arbre (O(n log n), erreur ~3 % de la force typique à θ=0.7,
+  // négligeable devant les approximations du modèle). Étoile-étoile et
+  // étoile-gaz restent en calcul DIRECT exact : peu d'étoiles, coût nul,
+  // 3e loi de Newton préservée sur les paires avec feedback.
+  const NCAP=NMAX*12;
+  const tcx=new Float64Array(NCAP), tcy=new Float64Array(NCAP), th=new Float64Array(NCAP),
+        tm=new Float64Array(NCAP),  tmx=new Float64Array(NCAP), tmy=new Float64Array(NCAP);
+  const tchild=new Int32Array(NCAP*4), tpart=new Int32Array(NCAP);
+  const pnext=new Int32Array(NMAX);
+  let nNodes=0;
+  const THETA2=0.49, MAXDEPTH=22;     // θ=0.7 ; au-delà de MAXDEPTH : feuilles chaînées
+
+  function newNode(cx,cy,h){
+    const k=nNodes++;
+    tcx[k]=cx;tcy[k]=cy;th[k]=h;tm[k]=0;tmx[k]=0;tmy[k]=0;tpart[k]=-1;
+    tchild[4*k]=tchild[4*k+1]=tchild[4*k+2]=tchild[4*k+3]=-1;
+    return k;
+  }
+  function childFor(k,xi,yi){
+    const q=(xi>tcx[k]?1:0)|(yi>tcy[k]?2:0);
+    let c=tchild[4*k+q];
+    if (c===-1){
+      const h2=th[k]/2;
+      c=newNode(tcx[k]+((q&1)?h2:-h2), tcy[k]+((q&2)?h2:-h2), h2);
+      tchild[4*k+q]=c;
+    }
+    return c;
+  }
+  function insert(k,i,depth){
+    tm[k]+=m[i]; tmx[k]+=m[i]*x[i]; tmy[k]+=m[i]*y[i];
+    if (tpart[k]===-2){ insert(childFor(k,x[i],y[i]),i,depth+1); return; }   // interne
+    if (tpart[k]===-1){ tpart[k]=i; pnext[i]=-1; return; }                   // feuille vide
+    if (depth>=MAXDEPTH){ pnext[i]=tpart[k]; tpart[k]=i; return; }           // chaîne
+    const j=tpart[k]; tpart[k]=-2;                                           // subdivision
+    insert(childFor(k,x[j],y[j]),j,depth+1);
+    insert(childFor(k,x[i],y[i]),i,depth+1);
+  }
+  function buildTree(){
+    nNodes=0;
+    let xmin=1e18,xmax=-1e18,ymin=1e18,ymax=-1e18,any=false;
+    for (let i=0;i<n;i++){
+      if (star[i]) continue; any=true;
+      if (x[i]<xmin)xmin=x[i]; if (x[i]>xmax)xmax=x[i];
+      if (y[i]<ymin)ymin=y[i]; if (y[i]>ymax)ymax=y[i];
+    }
+    if (!any){ newNode(0,0,1); return; }
+    newNode((xmin+xmax)/2,(ymin+ymax)/2, Math.max(xmax-xmin,ymax-ymin)/2+1);
+    for (let i=0;i<n;i++) if (!star[i]) insert(0,i,0);
+  }
+  const bhStack=new Int32Array(4096);
+  let FX=0, FY=0;
+  function bhForce(xi,yi,iSelf,Gf){
+    let sp=0; bhStack[sp++]=0; let fx=0,fy=0;
+    while (sp>0){
+      const k=bhStack[--sp];
+      if (tm[k]===0) continue;
+      if (tpart[k]>=0){                                  // feuille (chaînée éventuellement)
+        for (let p=tpart[k];p!==-1;p=pnext[p]){
+          if (p===iSelf) continue;
+          const dx=x[p]-xi,dy=y[p]-yi,r2=dx*dx+dy*dy+EPS2;
+          const inv=1/Math.sqrt(r2), f=Gf*m[p]*inv/r2;
+          fx+=f*dx; fy+=f*dy;
+        }
+      } else if (tpart[k]===-2){                         // interne : critère d'ouverture
+        const dx=tmx[k]/tm[k]-xi, dy=tmy[k]/tm[k]-yi, d2=dx*dx+dy*dy;
+        const w=2*th[k];
+        if (w*w < THETA2*d2){
+          const r2=d2+EPS2, inv=1/Math.sqrt(r2), f=Gf*tm[k]*inv/r2;
+          fx+=f*dx; fy+=f*dy;
+        } else {
+          for (let q=0;q<4;q++){ const c=tchild[4*k+q]; if (c!==-1) bhStack[sp++]=c; }
+        }
+      }
+    }
+    FX=fx; FY=fy;
+  }
+  const starList=[];
+
+  // ---------- forces : gravité BH + courte portée par grille ----------
+  function forces(){
+    ax.fill(0,0,n); ay.fill(0,0,n); nb.fill(0,0,n);
+    starList.length=0;
+    for (let i=0;i<n;i++) if (star[i]) starList.push(i);
+    buildTree();
+    const FB1=1-sim.FB, K=sim.K;
+    for (let i=0;i<n;i++){
+      if (star[i]) continue;
+      bhForce(x[i],y[i],i,G);                            // gaz <- gaz (arbre)
+      ax[i]+=FX; ay[i]+=FY;
+      for (const s of starList){                          // gaz <-> étoile (direct, ASYMÉTRIQUE)
+        // La pression de radiation pousse le GAZ ; l'étoile, qui émet ses photons
+        // isotropiquement, ne subit aucun recul net : elle ressent la gravité PLEINE
+        // du gaz. L'impulsion "manquante" est emportée par les photons hors système.
+        const dx=x[s]-x[i],dy=y[s]-y[i],r2=dx*dx+dy*dy+EPS2;
+        const inv=1/Math.sqrt(r2), f=G*inv/r2;
+        ax[i]+=f*FB1*m[s]*dx; ay[i]+=f*FB1*m[s]*dy;
+        ax[s]-=f*m[i]*dx;     ay[s]-=f*m[i]*dy;
+      }
+    }
+    for (let a2=0;a2<starList.length;a2++)               // étoile <-> étoile (direct, plein)
+      for (let b2=a2+1;b2<starList.length;b2++){
+        const i=starList[a2], j=starList[b2];
+        const dx=x[j]-x[i],dy=y[j]-y[i],r2=dx*dx+dy*dy+4;   // softening réduit (2 px) : binaires serrées
+        const inv=1/Math.sqrt(r2), f=G*inv/r2;
+        ax[i]+=f*m[j]*dx; ay[i]+=f*m[j]*dy;
+        ax[j]-=f*m[i]*dx; ay[j]-=f*m[i]*dy;
+      }
+    // Ancrage : fond de Plummer centré — TRICHE ASSUMÉE, interprétable comme la
+    // masse non résolue du complexe moléculaire parent. Masse = anchor × masse du
+    // nuage, rayon de cœur 0.6·Rc. Dilemme réel à explorer au slider : plus
+    // l'ancrage est fort, plus l'amas reste compact... et plus les rencontres
+    // détruisent les binaires (les environnements denses les fusionnent).
+    // NB : la friction gazeuse a été testée et REJETÉE — elle couple les étoiles
+    // au vent de feedback et les emporte avec lui (dispersion aggravée).
+    if (sim.anchor>0){
+      const MB=sim.anchor*sim.N0, B2=(0.6*sim.Rc)*(0.6*sim.Rc);
+      for (let i=0;i<n;i++){
+        const r2=x[i]*x[i]+y[i]*y[i]+B2, inv=1/Math.sqrt(r2), f=G*MB*inv/r2;
+        ax[i]-=f*x[i]; ay[i]-=f*y[i];
+      }
+    }
+    buildGrid();
+    for (let i=0;i<n;i++){
+      const cx=Math.floor(x[i]/H),cy=Math.floor(y[i]/H);
+      for (let gx=cx-1;gx<=cx+1;gx++)for (let gy=cy-1;gy<=cy+1;gy++){
+        const l=grid.get(gkey(gx,gy)); if(!l) continue;
+        for (const j of l){
+          if (j<=i) continue;
+          const dx=x[j]-x[i],dy=y[j]-y[i],r2=dx*dx+dy*dy;
+          if (r2>=H*H||r2<1e-9) continue;
+          const r=Math.sqrt(r2),q=1-r/H, ux=dx/r,uy=dy/r;
+          nb[i]++; nb[j]++;
+          if (!star[i]&&!star[j]){
+            const fp=K*q;                          // pression isotherme (répulsion)
+            ax[i]-=fp*ux; ay[i]-=fp*uy; ax[j]+=fp*ux; ay[j]+=fp*uy;
+            const vr=(vx[j]-vx[i])*ux+(vy[j]-vy[i])*uy;
+            if (vr<0){                             // viscosité si rapprochement
+              const fv=0.06*vr*q;
+              ax[i]+=fv*ux; ay[i]+=fv*uy; ax[j]-=fv*ux; ay[j]-=fv*uy;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ---------- particules-puits : formation, accrétion, fusion ----------
+  function sinks(){
+    for (let i=0;i<n;i++){
+      if (star[i]||nb[i]<NCR) continue;
+      let M=0,X=0,Y=0,PX=0,PY=0; const grab=[];
+      const cx=Math.floor(x[i]/H),cy=Math.floor(y[i]/H);
+      for (let gx=cx-1;gx<=cx+1;gx++)for (let gy=cy-1;gy<=cy+1;gy++){
+        const l=grid.get(gkey(gx,gy)); if(!l) continue;
+        for (const j of l){
+          if (star[j]) continue;
+          const dx=x[j]-x[i],dy=y[j]-y[i];
+          // rayon de capture < H : ne pas aspirer le matériau du COMPAGNON potentiel —
+          // les binaires réelles sont surtout primordiales (fragmentation d'un même cœur)
+          if (dx*dx+dy*dy<0.52*H*H){ grab.push(j); M+=m[j];X+=m[j]*x[j];Y+=m[j]*y[j];PX+=m[j]*vx[j];PY+=m[j]*vy[j]; }
+        }
+      }
+      if (grab.length<NCR) continue;
+      grab.sort((a,b)=>b-a);                       // suppression par indices décroissants
+      for (const j of grab) remove(j);
+      x[n]=X/M;y[n]=Y/M;vx[n]=PX/M;vy[n]=PY/M;m[n]=M;star[n]=1;n++;
+      buildGrid(); return;                          // une naissance par pas suffit
+    }
+    for (let i=0;i<n;i++){                          // accrétion + fusion d'étoiles
+      if (!star[i]) continue;
+      const ra=3+1.0*Math.cbrt(m[i]);
+      for (let j=n-1;j>=0;j--){
+        if (j===i) continue;
+        // étoile-étoile : fusion au CONTACT réel seulement (sinon les binaires
+        // seraient mangées avant d'exister) ; gaz : rayon d'accrétion normal
+        const rc = star[j] ? (2.5+0.7*Math.cbrt(m[i])) : ra;
+        const dx=x[j]-x[i],dy=y[j]-y[i];
+        if (dx*dx+dy*dy<rc*rc){
+          const M=m[i]+m[j];
+          vx[i]=(m[i]*vx[i]+m[j]*vx[j])/M; vy[i]=(m[i]*vy[i]+m[j]*vy[j])/M;
+          x[i]=(m[i]*x[i]+m[j]*x[j])/M;    y[i]=(m[i]*y[i]+m[j]*y[j])/M;
+          m[i]=M; remove(j); if (j<i) i--;
+        }
+      }
+    }
+  }
+
+  // ---------- pas leapfrog (une seule évaluation de force par pas) ----------
+  function step(){
+    for (let i=0;i<n;i++){ vx[i]+=0.5*ax[i]*DT; vy[i]+=0.5*ay[i]*DT; x[i]+=vx[i]*DT; y[i]+=vy[i]*DT; }
+    forces();
+    for (let i=0;i<n;i++){ vx[i]+=0.5*ax[i]*DT; vy[i]+=0.5*ay[i]*DT; }
+    sinks();
+  }
+
+  // ---------- rendu : gaz en PIXELS additifs, étoiles en sprites ----------
+  // 8000 drawImage en compositing 'lighter' ne tiennent pas la cadence ; à la place,
+  // chaque particule ADDITIONNE son intensité dans un tampon Float32 en demi-résolution
+  // (croix de 5 pixels), converti d'un bloc en couleurs (rampe bleu->blanc selon la
+  // densité cumulée) puis affiché en un seul putImageData + upscale lissé — qui
+  // redonne au passage un moelleux de nébuleuse. Les étoiles (peu nombreuses)
+  // restent en sprites avec halo.
+  const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  const DPR=Math.min(window.devicePixelRatio||1,2);
+  let W=0,Hh=0, bufW=2,bufH=2, bufCv=null,bufCtx=null,bufImg=null,bufPix=null,intens=null;
+  function resize(){
+    W=window.innerWidth; Hh=window.innerHeight;
+    cv.width=W*DPR; cv.height=Hh*DPR;
+    cv.style.width=W+'px'; cv.style.height=Hh+'px';
+    bufW=Math.max(2,W>>1); bufH=Math.max(2,Hh>>1);          // demi-résolution CSS
+    if (!bufCv) bufCv=document.createElement('canvas');
+    bufCv.width=bufW; bufCv.height=bufH;
+    bufCtx=bufCv.getContext('2d');
+    bufImg=bufCtx.createImageData(bufW,bufH);
+    bufPix=new Uint32Array(bufImg.data.buffer);             // accès 32 bits (ABGR little-endian)
+    intens=new Float32Array(bufW*bufH);
+  }
+  window.addEventListener('resize',resize); resize();
+
+  function makeSprite(stops){
+    const c=document.createElement('canvas'); c.width=c.height=64;
+    const g=c.getContext('2d');
+    const gr=g.createRadialGradient(32,32,1,32,32,32);
+    for (const [t,col] of stops) gr.addColorStop(t,col);
+    g.fillStyle=gr; g.fillRect(0,0,64,64);
+    return c;
+  }
+  const spHot  = makeSprite([[0,'rgba(255,200,150,0.9)'],[0.4,'rgba(255,150,110,0.25)'],[1,'rgba(255,120,90,0)']]);
+  // banque de sprites stellaires : couleur ~ température ~ MASSE (séquence principale,
+  // qualitative — nos masses sont en unités arbitraires). Échelle log : ~24 (masse de
+  // formation) -> rouge-orangé ; 400+ (après accrétion/fusions) -> bleu-blanc.
+  // La couleur est relue à chaque frame depuis m[i] : une étoile qui accrète BLEUIT
+  // en direct. Le halo spHot reste rosé pour toutes : c'est du H-alpha (région HII),
+  // sa couleur ne dépend pas de l'étoile qui l'excite.
+  const STAR_TINTS=[
+    [255,138, 84],   // ~M : rouge-orangé
+    [255,178,112],   // ~K
+    [255,212,156],   // ~G
+    [255,238,208],   // ~F
+    [255,250,244],   // ~A : blanc
+    [222,232,255],   // ~B
+    [176,198,255]    // ~O : bleu
+  ];
+  const spStars=STAR_TINTS.map(c=>makeSprite([
+    [0,   'rgba(255,255,255,1)'],
+    [0.16,'rgba('+c[0]+','+c[1]+','+c[2]+',0.9)'],
+    [0.45,'rgba('+c[0]+','+c[1]+','+c[2]+',0.25)'],
+    [1,   'rgba('+c[0]+','+c[1]+','+c[2]+',0)']]));
+  function starBin(mm){
+    const t=Math.log(mm/22)/Math.log(420/22);          // 22 -> 0 (rouge), 420 -> 1 (bleu)
+    const k=Math.round(t*(STAR_TINTS.length-1));
+    return k<0?0:(k>STAR_TINTS.length-1?STAR_TINTS.length-1:k);
+  }
+
+  const view={zoom:1, px:0, py:0};                  // caméra 2D : zoom + pan
+  function draw(){
+    // --- gaz : accumulation d'intensité par pixel (tampon demi-résolution) ---
+    intens.fill(0);
+    const S=view.zoom*Math.min(W,Hh)/(2.6*(sim.Rc||R));
+    const ox=W/2+view.px, oy=Hh/2+view.py;
+    for (let i=0;i<n;i++){
+      if (star[i]) continue;
+      const px=((ox + x[i]*S)*0.5)|0, py=((oy + y[i]*S)*0.5)|0;
+      if (px<1||py<1||px>=bufW-1||py>=bufH-1) continue;
+      const d=Math.min(nb[i],18)/18;                // densité locale -> luminosité
+      const b=0.35+0.9*d, k=py*bufW+px;
+      intens[k]+=b;
+      intens[k-1]+=b*0.35; intens[k+1]+=b*0.35;     // croix de 5 pixels
+      intens[k-bufW]+=b*0.35; intens[k+bufW]+=b*0.35;
+    }
+    // --- conversion intensité -> couleur : rampe bleu sombre -> blanc (densité) ---
+    for (let k=0;k<intens.length;k++){
+      const I=intens[k];
+      if (I===0){ bufPix[k]=0; continue; }          // transparent
+      const t=I>2?2:I;
+      const r=Math.min(255,(t*55+t*t*70))|0;
+      const g=Math.min(255,(t*80+t*t*70))|0;
+      const b=Math.min(255,(t*200+t*t*30))|0;
+      bufPix[k]=(255<<24)|(b<<16)|(g<<8)|r;
+    }
+    bufCtx.putImageData(bufImg,0,0);
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle='#070b14'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.imageSmoothingEnabled=true;
+    ctx.drawImage(bufCv,0,0,cv.width,cv.height);    // upscale lissé : moelleux gratuit
+    // --- étoiles : sprites + halo (peu nombreuses, compositing additif) ---
+    const sc=DPR*S;
+    ctx.setTransform(sc,0,0,sc, DPR*ox, DPR*oy);
+    ctx.globalCompositeOperation='lighter';
+    for (let i=0;i<n;i++){
+      if (!star[i]) continue;
+      const s=5+3*Math.cbrt(m[i]);
+      ctx.globalAlpha=1;
+      ctx.drawImage(spStars[starBin(m[i])], x[i]-s, y[i]-s, 2*s, 2*s);
+      ctx.globalAlpha=0.25;                          // halo chaud : la "région HII"
+      ctx.drawImage(spHot, x[i]-2.5*s, y[i]-2.5*s, 5*s, 5*s);
+    }
+    ctx.globalAlpha=1;
+    ctx.globalCompositeOperation='source-over';
+  }
+
+  // ---------- interaction : pan + zoom ----------
+  let dragging=false, mx=0,my=0;
+  cv.addEventListener('pointerdown',e=>{ dragging=true; mx=e.clientX; my=e.clientY; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove',e=>{
+    if (!dragging) return;
+    view.px+=e.clientX-mx; view.py+=e.clientY-my; mx=e.clientX; my=e.clientY;
+  });
+  cv.addEventListener('pointerup',()=>{ dragging=false; });
+  cv.addEventListener('wheel',e=>{
+    e.preventDefault();
+    // zoom centré sur la souris : le point MONDE sous le curseur reste au même pixel.
+    // On le calcule à l'échelle courante, puis on rajuste le pan pour la nouvelle échelle.
+    const r=cv.getBoundingClientRect();
+    const mx=e.clientX-r.left, my=e.clientY-r.top;
+    const base=Math.min(W,Hh)/(2.6*(sim.Rc||R));
+    const S0=view.zoom*base;
+    const wx=(mx - W/2 - view.px)/S0, wy=(my - Hh/2 - view.py)/S0;
+    view.zoom=Math.max(0.3,Math.min(6, view.zoom*Math.pow(1.0015,-e.deltaY)));
+    const S1=view.zoom*base;
+    view.px = mx - W/2 - wx*S1;
+    view.py = my - Hh/2 - wy*S1;
+  },{passive:false});
+
+  // ---------- UI ----------
+  document.getElementById('bRun').addEventListener('click',function(){
+    sim.running=!sim.running;
+    this.classList.toggle('on',sim.running);
+    this.textContent=sim.running?'⏸ Pause':'▶ Lancer';
+  });
+  document.getElementById('bNew').addEventListener('click',()=>{ newCloud(); view.zoom=1; view.px=view.py=0; });
+
+  function slider(id,valId,fn,fmt){
+    const s=document.getElementById(id), v=document.getElementById(valId);
+    s.addEventListener('input',()=>{ fn(parseFloat(s.value)); v.textContent=fmt(parseFloat(s.value)); });
+  }
+  slider('sK','vK',  v=>sim.K=v*1e-3,        v=>v.toFixed(1));
+  slider('sFB','vFB',v=>sim.FB=v,            v=>v.toFixed(1));
+  slider('sAn','vAn',v=>sim.anchor=v,        v=>v.toFixed(2));
+  slider('sRot','vRot',v=>sim.OMEGA=v*1e-3,  v=>v.toFixed(1));
+  slider('sTurb','vTurb',v=>sim.TURB=v,      v=>v.toFixed(2));
+  slider('sN','vN',  v=>sim.N0=v|0,          v=>v.toFixed(0));
+  slider('sSpd','vSpd',v=>sim.speed=v|0,     v=>'×'+v.toFixed(0));
+
+  // ---------- boucle ----------
+  const rGas=document.getElementById('rGas'), rStars=document.getElementById('rStars'),
+        rEff=document.getElementById('rEff'), fpsEl=document.getElementById('fps');
+  let last=performance.now(), fpsT=0, fpsN=0, msP=0, msD=0;
+
+  function loop(now){
+    const dt=(now-last)/1000; last=now;
+    // Badge : "x fps | p/g" = % du temps de frame en physique / en affichage.
+    // Canvas 2D : tout est CPU, les pourcentages sont exhaustifs (contrairement
+    // au cas WebGL de gravity2 où le temps GPU échappe au chronomètre).
+    fpsT+=dt; fpsN++;
+    if (fpsT>=0.5){
+      const f=Math.round(fpsN/fpsT), avg=fpsT*1000/fpsN;
+      fpsEl.textContent=f+' fps | '+Math.min(99,Math.round(msP/avg*100))+'/'+Math.min(99,Math.round(msD/avg*100));
+      fpsEl.title='% du temps de frame : physique / affichage';
+      fpsEl.classList.toggle('low',f<30);
+      fpsT=0; fpsN=0;
+    }
+    let t0=performance.now();
+    if (sim.running) for (let s=0;s<sim.speed;s++) step();
+    msP=msP*0.9+(performance.now()-t0)*0.1;          // lissage exponentiel
+    t0=performance.now();
+    draw();
+    msD=msD*0.9+(performance.now()-t0)*0.1;
+    let ns=0,ms=0,Mt=0;
+    for (let i=0;i<n;i++){ Mt+=m[i]; if (star[i]){ns++;ms+=m[i];} }
+    rGas.textContent=(n-ns);
+    rStars.textContent=ns;
+    rEff.textContent=Mt>0?(ms/Mt*100).toFixed(0)+' %':'0 %';
+    requestAnimationFrame(loop);
+  }
+
+  newCloud();
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
